@@ -73,8 +73,8 @@ let deal = async (ctx) => {
 		}));
 	};
 
-    ctx.header('Content-Type', 'application/xml');
-	return ctx.text(
+	ctx.header('Content-Type', 'application/rss+xml; charset=UTF-8');
+	return ctx.body(
 		renderRss2({
 			title,
 			description,

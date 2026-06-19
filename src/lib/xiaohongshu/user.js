@@ -68,7 +68,7 @@ let deal = async (ctx) => {
 	}
 
 	const title = `${basicInfo.nickname} - ${category === 'notes' ? '笔记' : '收藏'} • 小红书 / RED`;
-	const description = `${basicInfo.desc} ${tags.map((t) => t.name).join(' ')} ${interactions.map((i) => `${i.count} ${i.name}`).join(' ')}`;
+	const description = `${basicInfo.desc || ''} ${(tags || []).map((t) => t?.name || '').join(' ')} ${(interactions || []).map((i) => `${i?.count ?? ''} ${i?.name || ''}`).join(' ')}`.trim();
 	const image = basicInfo.imageb || basicInfo.images;
 
 	// 注意：小红书在 SSR 阶段已把每条笔记的 noteId 脱敏为空串（实测 web/移动端 API
@@ -76,20 +76,22 @@ let deal = async (ctx) => {
 	// 具体笔记。这里回退指向用户主页，避免 RSS 阅读器中出现打不开的坏链接。
 	const renderNote = (notes) =>
 		(notes || []).flatMap((n) =>
-			(n || []).map(({ noteCard }) => {
-				noteCard = noteCard || {};
-				const cover = noteCard.cover || {};
-				const infoList = cover.infoList || [];
-				const coverUrl = (infoList[infoList.length - 1] || {}).url || cover.url || '';
-				return {
-					title: noteCard.displayTitle,
-					link: noteCard.noteId ? `${url}/${noteCard.noteId}` : url,
-					guid: `${noteCard.displayTitle}-${noteCard.noteId || ''}`,
-					description: coverUrl ? `<img src ="${coverUrl}"><br>${noteCard.displayTitle}` : `${noteCard.displayTitle}`,
-					author: noteCard.user?.nickname,
-					upvotes: noteCard.interactInfo?.likedCount,
-				};
-			})
+			(n || [])
+				.filter((entry) => entry)
+				.map((entry) => {
+					const noteCard = entry.noteCard || {};
+					const cover = noteCard.cover || {};
+					const infoList = cover.infoList || [];
+					const coverUrl = (infoList[infoList.length - 1] || {}).url || cover.url || '';
+					return {
+						title: noteCard.displayTitle,
+						link: noteCard.noteId ? `${url}/${noteCard.noteId}` : url,
+						guid: `${noteCard.displayTitle}-${noteCard.noteId || ''}`,
+						description: coverUrl ? `<img src ="${coverUrl}"><br>${noteCard.displayTitle}` : `${noteCard.displayTitle}`,
+						author: noteCard.user?.nickname,
+						upvotes: noteCard.interactInfo?.likedCount,
+					};
+				})
 		);
 	const renderCollect = (collect) => {
 		if (!collect) {
@@ -98,21 +100,23 @@ let deal = async (ctx) => {
 		if (collect.code !== 0) {
 			throw Error(JSON.stringify(collect));
 		}
-		if (!collect.data.notes.length) {
+		if (!Array.isArray(collect.data?.notes)) {
 			throw Error('该用户已设置收藏内容不可见');
 		}
-		return collect.data.notes.map((item) => {
-			const infoList = item.cover?.info_list || [];
-			const coverUrl = (infoList[infoList.length - 1] || {}).url || item.cover?.url || '';
-			return {
-				title: item.display_title,
-				link: item.note_id ? `${url}/${item.note_id}` : url,
-				guid: `${item.display_title}-${item.note_id || ''}`,
-				description: coverUrl ? `<img src ="${coverUrl}"><br>${item.display_title}` : `${item.display_title}`,
-				author: item.user?.nickname,
-				upvotes: item.interact_info?.likedCount,
-			};
-		});
+		return collect.data.notes
+			.filter((item) => item)
+			.map((item) => {
+				const infoList = item.cover?.info_list || [];
+				const coverUrl = (infoList[infoList.length - 1] || {}).url || item.cover?.url || '';
+				return {
+					title: item.display_title,
+					link: item.note_id ? `${url}/${item.note_id}` : url,
+					guid: `${item.display_title}-${item.note_id || ''}`,
+					description: coverUrl ? `<img src ="${coverUrl}"><br>${item.display_title}` : `${item.display_title}`,
+					author: item.user?.nickname,
+					upvotes: item.interact_info?.likedCount,
+				};
+			});
 	};
 
 	ctx.header('Content-Type', 'application/rss+xml; charset=UTF-8');
